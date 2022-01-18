@@ -10,7 +10,7 @@ public class MNISTRealTrain {
 		float learningRate = (float).1,decay = (float).99;
 		String fileName = "C:/Users/Babtu/Documents/Models/MNISTRealV1.ser";
 		MLP mnist = MLP.load("C:/Users/Babtu/Documents/Models/MNISTRealV1.ser");
-		mnist.customTrain(true,trainTime,printError,saveTime,batchSize,learningRate,decay,fileName);
+		mnist.customTrain(true,trainTime,printError,saveTime,learningRate,batchSize,decay,fileName);
 
 
 	}

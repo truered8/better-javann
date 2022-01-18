@@ -4,7 +4,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -14,15 +13,17 @@ import java.util.Random;
 import java.util.Scanner;
 import java.util.concurrent.ThreadLocalRandom;
 
+import ml.Util.*;
+
 public class MLP implements Serializable{
 
 	private static final long serialVersionUID = 1L;
 	
 	/** Activation function */
-	String activation;
+	Activation activation;
 
 	/** Loss function */
-	String loss; 
+	Loss loss; 
 	
 	/** Activations of each neuron */
 	private float[][] activations;
@@ -57,7 +58,7 @@ public class MLP implements Serializable{
 	 * @param activation     The activation function
 	 * @param loss           The loss function
 	 */
-	public MLP(int[] neuronNumbers, String activation, String loss) {
+	public MLP(int[] neuronNumbers, Activation activation, Loss loss) {
 		this.neuronNumbers = neuronNumbers;
 		activations = new float[neuronNumbers.length][];
 		for(int i = 0;i < activations.length;i++) {
@@ -244,7 +245,7 @@ public class MLP implements Serializable{
 	 * Initializes weights and biases randomly.
 	 * @return void
 	 */
-	public void createNetwork() {
+	public void initialize() {
 		
 		float max = (float).1;
 		float min = (float)-.1;
@@ -281,7 +282,7 @@ public class MLP implements Serializable{
 	 * @throws IOException
 	 */
 	public void getFileWeights(String fileName) throws IOException {
-		Scanner reader = new Scanner(new BufferedReader(new FileReader("C:/Users/Babtu/Documents/" + fileName)));
+		Scanner reader = new Scanner(new BufferedReader(new FileReader(fileName)));
 		int layer = 0;
 		int neuron = 0;
 		int lastNeuron = 0;
@@ -424,10 +425,10 @@ public class MLP implements Serializable{
 					for(int m = 0;m < activations[l].length;m++) {
 						if(l == 0) {
 							activations[l][m] = trainYBatches[j][k][m];
-						} else if(!activation.equals("softmax")){
-							activations[l][m] = activate(calculate(activations[l - 1], weights[l - 1][m], biases[l - 1][m]), activation);
+						} else if(activation != Activation.SOFTMAX){
+							activations[l][m] = Util.activate(Util.calculate(activations[l - 1], weights[l - 1][m], biases[l - 1][m]), activation);
 						} else {
-							activations[l][m] = calculate(activations[l - 1], weights[l - 1][m], biases[l - 1][m]);
+							activations[l][m] = Util.calculate(activations[l - 1], weights[l - 1][m], biases[l - 1][m]);
 						}
 					}
 				}
@@ -438,24 +439,24 @@ public class MLP implements Serializable{
 					targets[targets.length - (l + 1)] = trainXBatches[j][k][trainXBatches[j][k].length - (l + 1)];
 				}
 				for(int l = 0;l < activations[activations.length - 1].length;l++) {
-					activations[activations.length - 1][l] = calculate(activations[activations.length - 2], weights[weights.length - 1][l], biases[biases.length - 1][l]);
+					activations[activations.length - 1][l] = Util.calculate(activations[activations.length - 2], weights[weights.length - 1][l], biases[biases.length - 1][l]);
 					if(Float.isNaN(activations[activations.length - 1][l])) {
 						System.out.print(weights[0][0][0]);
 					}
 				}
 				float activatedOutputs[] = new float[neuronNumbers[neuronNumbers.length - 1]];
-				if(!activation.equals("softmax")) {
+				if(activation != Activation.SOFTMAX) {
 					for(int l = 0;l < activatedOutputs.length;l++) {
-						activatedOutputs[l] = activate(activations[activations.length - 1][l], activation);
+						activatedOutputs[l] = Util.activate(activations[activations.length - 1][l], activation);
 					}
 				} else {
-					activatedOutputs = softmax(activations[activations.length - 1]);
+					activatedOutputs = Util.softmax(activations[activations.length - 1]);
 				}
 				float cost = 0;
 				for(int l = 0;l < neuronNumbers[neuronNumbers.length - 1];l++) {
-					cost += loss(activatedOutputs[l], targets[l], loss);
+					cost += Util.loss(activatedOutputs[l], targets[l], loss);
 				}
-				if(loss.equals("CE")) {
+				if(loss == Loss.CE) {
 					cost *= -1;
 				}
 				
@@ -463,9 +464,9 @@ public class MLP implements Serializable{
 				// The derivative of the cost function
 				float dCostDActivatedOutputs[] = new float[neuronNumbers[neuronNumbers.length - 1]];
 				for(int l = 0;l < dCostDActivatedOutputs.length;l++) {
-					if(loss.equals("MSE")) {
+					if(loss == Loss.SE) {
 						dCostDActivatedOutputs[l] = 2 * (activatedOutputs[l] - targets[l]);
-					} else if(loss.equals("CE")) {
+					} else if(loss == Loss.CE) {
 						dCostDActivatedOutputs[l] = activatedOutputs[l] - targets[l];
 					}
 				}
@@ -478,21 +479,21 @@ public class MLP implements Serializable{
 				}
 				for(int l = 0;l < dActivatedOutputsDOutputs.length;l++) {
 					for(int m = 0;m < dActivatedOutputsDOutputs[l].length;m++) {
-						if(activation.equals("sigmoid")) {
-							dActivatedOutputsDOutputs[l][m] = activate(activations[activations.length - (l + 1)][m], activation) * (1 - activate(activations[activations.length - (l + 1)][m], activation));
-						} else if(activation.equals("softplus")) {
+						if(activation == Activation.SIGMOID) {
+							dActivatedOutputsDOutputs[l][m] = Util.activate(activations[activations.length - (l + 1)][m], activation) * (1 - Util.activate(activations[activations.length - (l + 1)][m], activation));
+						} else if(activation == Activation.SOFTMAX) {
 							if(l == 0) {
-								dActivatedOutputsDOutputs[0][0] = activate(activations[activations.length - 1][m], "sigmoid");
+								dActivatedOutputsDOutputs[0][0] = Util.activate(activations[activations.length - 1][m], Activation.SIGMOID);
 							} else {
-								dActivatedOutputsDOutputs[l][m] = activate(activations[activations.length - (l + 1)][m], "sigmoid");
+								dActivatedOutputsDOutputs[l][m] = Util.activate(activations[activations.length - (l + 1)][m], Activation.SIGMOID);
 							}
-						} else if(activation.equals("softmax")) {
+						} else if(activation == Activation.SOFTMAX) {
 							if(l == 0) {
 								dActivatedOutputsDOutputs[l][m] = 1;// activatedOutputs[m] - trainXBatch[k][m + neuronNumbers[0]];
 							} else {
 								dActivatedOutputsDOutputs[l][m] = 1;// activate(neurons[neurons.length - (l + 1)][m], activation) * (1 - activate(neurons[neurons.length - (l + 1)][m], activation));
 							}
-						} else if(activation.equals("ReLU")) {
+						} else if(activation == Activation.RELU) {
 							if(activations[activations.length - (l + 1)][m] > 0) {
 								dActivatedOutputsDOutputs[l][m] = 1;
 								System.out.println("0");
@@ -638,8 +639,7 @@ public class MLP implements Serializable{
 		for(int i = 0;i <= trainTime;i++) {
 			trainSGD(learningRate, batchSize);
 			if(i % printLoss == 0) {
-				System.out.println("Iteration: " + i);
-				System.out.println("Loss: " + getCost());
+				System.out.println("Iteration: " + i + " Loss: " + getCost());
 				if(test) {
 					System.out.println("Accuracy: " + test() + " / " + testX.length);
 				}
@@ -668,7 +668,7 @@ public class MLP implements Serializable{
 					if(j == 0) {
 						activations[j][k] = testY[i][k];
 					} else {
-						activations[j][k] = activate(calculate(activations[j - 1], weights[j - 1][k], biases[j - 1][k]), activation);
+						activations[j][k] = Util.activate(Util.calculate(activations[j - 1], weights[j - 1][k], biases[j - 1][k]), activation);
 					}
 				}
 			}
@@ -678,19 +678,19 @@ public class MLP implements Serializable{
 				targets[targets.length - (j + 1)] = testX[i][testX[i].length - (j + 1)];
 			}
 			for(int j = 0;j < activations[activations.length - 1].length;j++) {
-				activations[activations.length - 1][j] = calculate(activations[activations.length - 2], weights[weights.length - 1][j], biases[biases.length - 1][j]);
+				activations[activations.length - 1][j] = Util.calculate(activations[activations.length - 2], weights[weights.length - 1][j], biases[biases.length - 1][j]);
 			}
 			float activatedOutputs[] = new float[neuronNumbers[neuronNumbers.length - 1]];
-			if(!activation.equals("softmax")) {
+			if(activation != Activation.SOFTMAX) {
 				for(int j = 0;j < activatedOutputs.length;j++) {
-					activatedOutputs[j] = activate(activations[activations.length - 1][j], activation);
+					activatedOutputs[j] = Util.activate(activations[activations.length - 1][j], activation);
 				}
 			} else {
-				activatedOutputs = softmax(activations[activations.length - 1]);
+				activatedOutputs = Util.softmax(activations[activations.length - 1]);
 			}
 			boolean correct = true;
 			for(int j = 0;j < neuronNumbers[neuronNumbers.length - 1];j++) {
-				if(step(activatedOutputs[j]) != targets[j]) {
+				if((float) Math.round(activatedOutputs[j]) != targets[j]) {
 					correct = false;
 				}
 			}
@@ -710,141 +710,40 @@ public class MLP implements Serializable{
 	public float[] feedForward(float[] inputs) {
 		float newOutputs[] = new float[neuronNumbers[neuronNumbers.length - 1]];
 		if(activations.length == 2) {
-			if(!activation.equals("softmax")) {
+			if(activation != Activation.SOFTMAX) {
 				for(int i = 0;i < newOutputs.length;i++) {
-					newOutputs[i] = activate(calculate(inputs, weights[0][i], biases[0][i]), activation);
+					newOutputs[i] = Util.activate(Util.calculate(inputs, weights[0][i], biases[0][i]), activation);
 				}
 			} else {
 				for(int i = 0;i < newOutputs.length;i++) {
-					newOutputs[i] = calculate(inputs, weights[0][i], biases[0][i]);
+					newOutputs[i] = Util.calculate(inputs, weights[0][i], biases[0][i]);
 				}
-				newOutputs = softmax(newOutputs);
+				newOutputs = Util.softmax(newOutputs);
 			}
 		} else {
 			for(int i = 0;i < activations.length - 2;i++) {
 				if(i == 0) {
 					for(int j = 0;j < neuronNumbers[1];j++) {
-						activations[1][j] = activate(calculate(inputs, weights[i][j], biases[i][j]), activation);
+						activations[1][j] = Util.activate(Util.calculate(inputs, weights[i][j], biases[i][j]), activation);
 					}
 				} else {
 					for(int j = 0;j < neuronNumbers[i + 1];j++) {
-						activations[i + 1][j] = activate(calculate(activations[i - 1], weights[i][j], biases[i][j]), activation);
+						activations[i + 1][j] = Util.activate(Util.calculate(activations[i - 1], weights[i][j], biases[i][j]), activation);
 					}
 				}
 			}
-			if(!activation.equals("softmax")) {
+			if(activation != Activation.SOFTMAX) {
 				for(int i = 0;i < newOutputs.length;i++) {
-					newOutputs[i] = activate(calculate(activations[activations.length - 2], weights[weights.length - 1][i], biases[biases.length - 1][i]), activation);
+					newOutputs[i] = Util.activate(Util.calculate(activations[activations.length - 2], weights[weights.length - 1][i], biases[biases.length - 1][i]), activation);
 				}
 			} else {
 				for(int i = 0;i < newOutputs.length;i++) {
-					newOutputs[i] = calculate(activations[activations.length - 2], weights[weights.length - 1][i], biases[biases.length - 1][i]);
+					newOutputs[i] = Util.calculate(activations[activations.length - 2], weights[weights.length - 1][i], biases[biases.length - 1][i]);
 				}
-				newOutputs = softmax(newOutputs);
+				newOutputs = Util.softmax(newOutputs);
 			}
 		}
 		return newOutputs;
-	}
-
-	/**
-	 * Returns the input after being activated.
-	 * @param x         The input to be activated
-	 * @param function  The activation function
-	 * @return          The activated input
-	 */
-	public static float activate(float x, String function) {
-		float result = 0;
-		if (function.equals("sigmoid") || function.equals("softmax")) {
-			result = (float) (1 / (1 + Math.exp(x * -1)));
-		} else if (function.equals("abs")) {
-			result = Math.abs(x);
-		} else if (function.equals("softplus")) {
-			result = (float) Math.log(1 + Math.exp(x));
-		} else if (function.equals("ReLU")) {
-			result = Math.max(0, x);
-		} else {
-			result = x;
-		}
-		return result;
-	}
-	
-	/**
-	 * Returns the input vector after being activated with softmax.
-	 * @param x  The input vector
-	 * @return   The activated input
-	 */
-	public static float[] softmax(float[] x) {
-		float sum = 0;
-		float exponentials[] = new float[x.length];
-		for (int i = 0; i < x.length; i++) {
-			exponentials[i] = Math.min((float) Math.exp(x[i]), Float.MAX_VALUE);
-			sum += exponentials[i];
-		}
-		if (Float.isInfinite((sum))) {
-			sum = Float.MAX_VALUE;
-		}
-		float[] activations = new float[x.length];
-		for (int i = 0; i < activations.length; i++) {
-			activations[i] = (float) (exponentials[i] / sum);
-			if (activations[i] == 0) {
-				activations[i] = (float) 1e-35;
-			}
-			if (Float.isNaN(activations[i])) {
-				System.out.println("NaN Activation");
-			}
-		}
-		return activations;
-	}
-	
-	/**
-	 * Returns the weighted sum of the inputs and the bias.
-	 * @param n  The input vector
-	 * @param w  The weights
-	 * @param b  The bias
-	 * @return   The weighted sum
-	 */
-	public static float calculate(float[] n, float[] w, float b) {
-		return dotProduct(n, w) + b;
-	}
-	
-	/**
-	 * Rounds the input.
-	 * @param x  A float
-	 * @return   The rounded input
-	 */
-	public static float step(float x) {
-		return (float) Math.round(x);
-	}
-	
-	/**
-	 * Returns the dot product of the input vectors.
-	 * @param x  The first input vector
-	 * @param y  The second input vector
-	 * @return   `x` dot `y`
-	 */
-	public static float dotProduct(float[] x, float[] y) {
-		float sum = 0;
-		for (int i = 0; i < x.length; i++) {
-			sum += x[i] * y[i];
-		}
-		return sum;
-	}
-	
-	/**
-	 * Calculates the current loss of the model.
-	 * @param x         The predicted value
-	 * @param y         The actual value
-	 * @param function  The loss function
-	 * @return          The current loss
-	 */
-	public static float loss(float x, float y, String function) {
-		float loss = 23;
-		if(function.equals("MSE")) {
-			loss = (float)Math.pow(x - y,  2);
-		} else if(function.equals("CE")) {
-			loss = (float)Math.log(x) * y;
-		}
-		return loss;
 	}
 	
 	/**
@@ -923,7 +822,7 @@ public class MLP implements Serializable{
 	public static MLP load(String fileName) throws IOException,  ClassNotFoundException {
         InputStream inStream = new FileInputStream(fileName);
 		ObjectInputStream fileObjectIn = new ObjectInputStream(inStream);
-        MLP loaded = (MLP)fileObjectIn.readObject();
+        MLP loaded = (MLP) fileObjectIn.readObject();
         fileObjectIn.close();
         return loaded;
 	}
