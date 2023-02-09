@@ -1,22 +1,15 @@
 package ml;
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
-import java.io.Serializable;
+import java.io.*;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.Scanner;
 import java.util.concurrent.ThreadLocalRandom;
 
 import ml.Util.*;
 
-public class MLP implements Serializable{
+public class MLP implements Serializable {
 
+	@Serial
 	private static final long serialVersionUID = 1L;
 	
 	/** Activation function */
@@ -26,157 +19,104 @@ public class MLP implements Serializable{
 	Loss loss; 
 	
 	/** Activations of each neuron */
-	private float[][] activations;
+	private final float[][] activations;
 
 	/** Number of neurons in each layer */
-	private int[] neuronNumbers;
-	
+	private final int[] neurons;
+
 	/** Training data */
-	private float[] trainX[];
+	private float[][] trainInputs;
 
 	/** Training labels */
-	private float[] trainY[];
+	private float[][] trainLabels;
 
 	/** Test data */
-	private float[] testX[];
+	private float[][] testInputs;
 
 	/** Test labels */
-	private float[] testY[];
-	
+	private float[][] testLabels;
+
 	/** Weights between neurons */
 	private float[][][] weights;
 
-	/** Biases for each label */
+	/** Biases for each layer */
 	private float[][] biases;
-	
+
 	/** Average training loss */
 	private float averageLoss;
-	
+
 	/**
 	 * Initializes a multilayer perceptron (MLP).
-	 * @param neuronNumbers  The number of neurons in each layer
+	 * @param neurons  The number of neurons in each layer
 	 * @param activation     The activation function
 	 * @param loss           The loss function
 	 */
-	public MLP(int[] neuronNumbers, Activation activation, Loss loss) {
-		this.neuronNumbers = neuronNumbers;
-		activations = new float[neuronNumbers.length][];
+	public MLP(int[] neurons, Activation activation, Loss loss) {
+		this.neurons = neurons;
+		activations = new float[neurons.length][];
 		for(int i = 0;i < activations.length;i++) {
-			activations[i] = new float[neuronNumbers[i]];
+			activations[i] = new float[neurons[i]];
 		}
 		this.activation = activation;
 		this.loss = loss;
 	}
-	
-	/**
-	 * Retrieves training data from a Comma Separated Values (CSV) file.
-	 * @param   fileName  The path to the data
-	 * @return  void
-	 * @throws  Exception
-	 */
-	public void getCSVData(String fileName) throws Exception {
-		// Copy values from CSV file into trainX array
-		int columns = 0;
-		int row = 0;
-		String inLine = "";
 
-		Scanner reader = new Scanner(new BufferedReader(new FileReader(fileName)));
-		BufferedReader read = new BufferedReader(new FileReader(fileName));
-		while (read.readLine() != null) {
-			columns += 1;
-		}
-
-		float[] trainX1[] = new float[columns - 1][reader.nextLine().split(", ").length];
-		while (reader.hasNextLine()) {
-			inLine = reader.nextLine();
-			String[] inArray = inLine.split(", ");
-			for (int x = 0; x < inArray.length; x++) {
-				if (inArray[x].equals("?")) {
-					trainX1[row][x] = -99999;
-				} else {
-					trainX1[row][x] = Float.parseFloat(inArray[x]);
-				}
-			}
-			row++;
-		}
-
-		// Copy attributes from trainX to trainY
-		float[] trainY1[] = new float[trainX1.length][trainX1[0].length - neuronNumbers[neuronNumbers.length - 1]];
-		for (int i = 0; i < trainX1.length; i++) {
-			for (int j = 0; j < trainX1[i].length - neuronNumbers[neuronNumbers.length - 1]; j++) {
-				trainY1[i][j] = trainX1[i][j];
-			}
-		}
-		trainX = trainX1;
-		trainY = trainY1;
-		reader.close();
-		read.close();
-	}
-	
 	/**
 	 * Retrieves training data from array.
 	 * @param data   A 2D array of the training data and labels
-	 * @return void
 	 */
 	public void getTrainingData(float[][] data) {
 
-		float[] trainY1[] = new float[data.length][data[0].length - neuronNumbers[neuronNumbers.length - 1]];
+		float[][] trainY1 = new float[data.length][data[0].length - neurons[neurons.length - 1]];
 		for (int i = 0; i < data.length; i++) {
-			for (int j = 0; j < data[i].length - neuronNumbers[neuronNumbers.length - 1]; j++) {
-				trainY1[i][j] = data[i][j];
-			}
+			if (data[i].length - neurons[neurons.length - 1] >= 0)
+				System.arraycopy(data[i], 0, trainY1[i], 0, data[i].length - neurons[neurons.length - 1]);
 		}
-		trainX = data;
-		trainY = trainY1;
+		trainInputs = data;
+		trainLabels = trainY1;
 	}
-	
+
 	/**
 	 * Retrieves test data from an array.
 	 * @param data   A 2D array of the test data and labels
-	 * @return void
 	 */
 	public void getTestData(float[][] data) {
-		float[] testY1[] = new float[data.length][data[0].length - neuronNumbers[neuronNumbers.length - 1]];
+		float[][] testY1 = new float[data.length][data[0].length - neurons[neurons.length - 1]];
 		for (int i = 0; i < data.length; i++) {
-			for (int j = 0; j < data[i].length - neuronNumbers[neuronNumbers.length - 1]; j++) {
-				testY1[i][j] = data[i][j];
-			}
+			if (data[i].length - neurons[neurons.length - 1] >= 0)
+				System.arraycopy(data[i], 0, testY1[i], 0, data[i].length - neurons[neurons.length - 1]);
 		}
-		testX = data;
-		testY = testY1;
+		testInputs = data;
+		testLabels = testY1;
 	}
-	
+
 	/**
 	 * Returns the vector in the given file in a One-hot format.
 	 * @param fileName    the path to the file
 	 * @param dataLength  the length of the vector
 	 * @return            the one-hot vector
-	 * @throws            Exception
 	 */
 	public float[][] toOneHot(String fileName, int dataLength) throws Exception {
-		float[] trainingData[] = new float[dataLength][neuronNumbers[0] + neuronNumbers[neuronNumbers.length - 1]];
-		Scanner train = new Scanner(new BufferedReader(new FileReader("C:/Users/Babtu/Documents/Datasets/" + fileName)));
+		float[][] trainingData = new float[dataLength][neurons[0] + neurons[neurons.length - 1]];
+		Scanner train = new Scanner(new BufferedReader(new FileReader(fileName)));
 		train.nextLine();
-		for(int i = 0;i < trainingData.length;i++) {
-			String stringValues[] = train.nextLine().split(", ");
-			float floatValues[] = new float[stringValues.length];
-			for(int j = 0;j < floatValues.length;j++) {
+		for (float[] row : trainingData) {
+			String[] stringValues = train.nextLine().split(", ");
+			float[] floatValues = new float[stringValues.length];
+			for (int j = 0; j < floatValues.length; j++) {
 				floatValues[j] = Float.parseFloat(stringValues[j]);
 			}
-			float oneHot[] = new float[neuronNumbers[neuronNumbers.length - 1]];
-			int index = (int)floatValues[0];
+			float[] oneHot = new float[neurons[neurons.length - 1]];
+			int index = (int) floatValues[0];
 			oneHot[index] = 1;
-			for(int j = 0;j < neuronNumbers[0];j++) {
-				trainingData[i][j] = floatValues[j + 1];
-			}
-			for(int j = 0;j < neuronNumbers[neuronNumbers.length - 1];j++) {
-				trainingData[i][j + neuronNumbers[0]] = oneHot[j];
-			}
+			if (neurons[0] >= 0) System.arraycopy(floatValues, 1, row, 0, neurons[0]);
+			if (neurons[neurons.length - 1] >= 0)
+				System.arraycopy(oneHot, 0, row, neurons[0], neurons[neurons.length - 1]);
 		}
 		train.close();
 		return trainingData;
 	}
-	
+
 	/**
 	 * Returns a scaled version of the given data.
 	 * @param x      A 2D array of data
@@ -184,41 +124,15 @@ public class MLP implements Serializable{
 	 * @return       A 2D array of scaled data
 	 */
 	public float[][] normalize(float[][] x, float range) {
-		float[] output[] = new float[x.length][x[0].length];
+		float[][] output = new float[x.length][x[0].length];
 		for(int i = 0;i < output.length;i++) {
-			for(int j = 0;j < output[i].length - neuronNumbers[neuronNumbers.length - 1];j++) {
+			for(int j = 0; j < output[i].length - neurons[neurons.length - 1]; j++) {
 				output[i][j] = x[i][j] / range;
 			}
-			for(int j = output[i].length - neuronNumbers[neuronNumbers.length - 1];j < output[i].length;j++) {
-				output[i][j] = x[i][j];
-			}
+			if (output[i].length - (output[i].length - neurons[neurons.length - 1]) >= 0)
+				System.arraycopy(x[i], output[i].length - neurons[neurons.length - 1], output[i], output[i].length - neurons[neurons.length - 1], output[i].length - (output[i].length - neurons[neurons.length - 1]));
 		}
 		return output;
-	}
-	
-	/** Returns the training data. */
-	public float[][] getTrainX() {
-		return trainX;
-	}
-
-	/** Returns the training labels. */
-	public float[][] getTrainY() {
-		return trainY;
-	}
-
-	/** Returns the test data. */
-	public float[][] getTestX() {
-		return testX;
-	}
-
-	/** Returns the weights. */
-	public float[][][] getWeights() {
-		return weights;
-	}
-
-	/** Returns the biases */
-	public float[][] getBiases() {
-		return biases;
 	}
 
 	/** Returns the cost. */
@@ -226,35 +140,18 @@ public class MLP implements Serializable{
 		return averageLoss;
 	}
 
-	/** Sets the training data. */
-	public void setTrainX(int i, int j, float newData) {
-		this.trainX[i][j] = newData;
-	}
-	
-	/** Sets a specific weight. */
-	public void setWeight(int i, int j, int k, float newWeight) {
-		weights[i][j][k] = newWeight;
-	}
-
-	/** Sets a specific bias. */
-	public void setBias(int i, int j, float newBias) {
-		biases[i][j] = newBias;
-	}
-
 	/**
 	 * Initializes weights and biases randomly.
-	 * @return void
 	 */
 	public void initialize() {
-		
 		float max = (float).1;
 		float min = (float)-.1;
 
-		float[][] weights1[] = new float[neuronNumbers.length - 1][][];
-		float[] biases1[] = new float[neuronNumbers.length - 1][];
-		
+		float[][][] weights1 = new float[neurons.length - 1][][];
+		float[][] biases1 = new float[neurons.length - 1][];
+
 		for(int i = 0;i < weights1.length;i++) {
-			float[] currentWeights[] = new float[neuronNumbers[i + 1]][neuronNumbers[i]];
+			float[][] currentWeights = new float[neurons[i + 1]][neurons[i]];
 			for(int j = 0;j < currentWeights.length;j++) {
 				for(int k = 0;k < currentWeights[j].length;k++) {
 					currentWeights[j][k] = min + (float) Math.random() * (max - min);
@@ -264,73 +161,17 @@ public class MLP implements Serializable{
 		}
 
 		for(int i = 0;i < biases1.length;i++) {
-			float tempArray[] = new float[neuronNumbers[i + 1]];
+			float[] tempArray = new float[neurons[i + 1]];
 			for(int j = 0;j < tempArray.length;j++) {
 				tempArray[j] = min + (float)Math.random() * (max - min);
 			}
 			biases1[i] = tempArray;
 		}
-		
+
 		weights = weights1;
 		biases = biases1;
 	}
-		
-	/**
-	 * Retrieves weights from a file.
-	 * @param fileName      The path to the file
-	 * @return void
-	 * @throws IOException
-	 */
-	public void getFileWeights(String fileName) throws IOException {
-		Scanner reader = new Scanner(new BufferedReader(new FileReader(fileName)));
-		int layer = 0;
-		int neuron = 0;
-		int lastNeuron = 0;
-		int line = 1;
-		String currentLine = "";
-		String lastLine = null;
-		while (reader.hasNextLine()) {
-			currentLine = reader.nextLine();
-			if (line != 1 && currentLine.equals("")) {
-				lastNeuron = 0;
-				neuron += 1;
-				if (lastLine.equals("")) {
-					layer += 1;
-					neuron = 0;
-				}
-			} else {
-				weights[layer][neuron][lastNeuron] = Float.parseFloat(currentLine);
-				lastNeuron++;
-			}
-			line++;
-			lastLine = currentLine;
-		}
-		reader.close();
-	}
-	
-	/**
-	 * Retrieves biases from a file.
-	 * @param fileName      The path to the file
-	 * @throws IOException
-	 */
-	public void getFileBiases(String fileName) throws IOException {
-		Scanner reader = new Scanner(new BufferedReader(new FileReader("C:/Users/Babtu/Documents/" + fileName)));
-		int layer = 0;
-		int neuron = 0;
-		String currentLine = "";
-		while(reader.hasNextLine()) {
-			currentLine = reader.nextLine();
-			if(currentLine.equals("")) {
-				layer += 1;
-				neuron = 0;
-			} else {
-				biases[layer][neuron] = Float.parseFloat(currentLine);
-				neuron += 1;
-			}
-		}
-		reader.close();
-	}
-	
+
 	/**
 	 * Completes a single iteration of stochastic gradient descent.
 	 * @param learningRate  The rate at which to update the parameters
@@ -348,72 +189,71 @@ public class MLP implements Serializable{
 		}
 		// Randomize training examples
 		Random rnd = ThreadLocalRandom.current();
-	    for(int i = trainX.length - 1; i > 0; i--) {
+	    for(int i = trainInputs.length - 1; i > 0; i--) {
 	      int index = rnd.nextInt(i + 1);
-	      float[] a = trainX[index];
-	      trainX[index] = trainX[i];
-	      trainX[i] = a;
+	      float[] a = trainInputs[index];
+	      trainInputs[index] = trainInputs[i];
+	      trainInputs[i] = a;
 	    }
-	    float[] trainY1[] = new float[trainX.length][trainX[0].length - neuronNumbers[neuronNumbers.length - 1]];
-		for(int i = 0;i < trainX.length;i++) {
-			for(int j = 0;j < trainX[i].length - neuronNumbers[neuronNumbers.length - 1];j++) {
-				trainY1[i][j] = trainX[i][j];
-			}
+	    float[][] trainY1 = new float[trainInputs.length][trainInputs[0].length - neurons[neurons.length - 1]];
+		for(int i = 0; i < trainInputs.length; i++) {
+			if (trainInputs[i].length - neurons[neurons.length - 1] >= 0)
+				System.arraycopy(trainInputs[i], 0, trainY1[i], 0, trainInputs[i].length - neurons[neurons.length - 1]);
 		}
-	    trainY = trainY1;
+	    trainLabels = trainY1;
 
 		// Organize data into batches for Stochastic gradient descent
-		float[][] trainXBatches[];
-		if(trainX.length % batchSize == 0) {
-			trainXBatches = new float[(int)(trainX.length / batchSize)][][];
+		float[][][] trainXBatches;
+		if(trainInputs.length % batchSize == 0) {
+			trainXBatches = new float[(int)(trainInputs.length / batchSize)][][];
 		} else {
-			trainXBatches = new float[(int)(trainX.length / batchSize) + 1][][];
+			trainXBatches = new float[(trainInputs.length / batchSize) + 1][][];
 		}
 		int trainXExamples = 0;
 		for(int i = 0;i < trainXBatches.length;i++) {
-			int examples = 0;
+			int examples;
 			if(i != trainXBatches.length - 1) {
 				examples = batchSize;
-			} else if(trainX.length % batchSize == 0) {
+			} else if(trainInputs.length % batchSize == 0) {
 				examples = batchSize;
 			} else {
-				examples = trainX.length % batchSize;
+				examples = trainInputs.length % batchSize;
 			}
 			float[][] currentExamples = new float[examples][];
 			for(int j = 0;j < examples;j++) {
-				currentExamples[j] = trainX[trainXExamples];
+				currentExamples[j] = trainInputs[trainXExamples];
 				trainXExamples++;
 			}
 			trainXBatches[i] = currentExamples;
 		}
-		float[][] trainYBatches[] = new float[(int)(trainX.length / batchSize) + 1][][];
+		float[][][] trainYBatches = new float[(trainInputs.length / batchSize) + 1][][];
 		int trainYExamples = 0;
 		for(int i = 0;i < trainYBatches.length;i++) {
-			int examples = 0;
+			int examples;
 			if(i != trainYBatches.length - 1) {
 				examples = batchSize;
 			} else {
-				examples = trainY.length % batchSize;
+				examples = trainLabels.length % batchSize;
 			}
 			float[][] currentExamples = new float[examples][];
 			for(int j = 0;j < examples;j++) {
-				currentExamples[j] = trainY[trainYExamples];
+				currentExamples[j] = trainLabels[trainYExamples];
 				trainYExamples++;
 			}
 			trainYBatches[i] = currentExamples;
 		}
-			
+
 		// Initialize arrays of total derivatives; e.g. totalDCostDWeights means the total derivative of the cost with respect to the weights
 		float totalCost = 0;
-		float[][] totalDCostDWeights[] = new float[weights.length][][];
+		float[][][] totalDCostDWeights = new float[weights.length][][];
 		for(int k = 0;k < weights.length;k++) {
-			float[] tempArray[] = new float[weights[k].length][activations[k].length];
+			float[][] tempArray = new float[weights[k].length][activations[k].length];
 			totalDCostDWeights[k] = tempArray;
 		}
 
-		float[] totalDCostDBiases[] = new float[biases.length][];
+		float[][] totalDCostDBiases = new float[biases.length][];
 		for(int k = 0;k < biases.length;k++) {
-			float tempArray[] = new float[biases[k].length];
+			float[] tempArray = new float[biases[k].length];
 			totalDCostDBiases[k] = tempArray;
 		}
 
@@ -434,7 +274,7 @@ public class MLP implements Serializable{
 				}
 
 				// Compute cost
-				float targets[] = new float[neuronNumbers[neuronNumbers.length - 1]];
+				float[] targets = new float[neurons[neurons.length - 1]];
 				for(int l = 0;l < targets.length;l++) {
 					targets[targets.length - (l + 1)] = trainXBatches[j][k][trainXBatches[j][k].length - (l + 1)];
 				}
@@ -444,7 +284,7 @@ public class MLP implements Serializable{
 						System.out.print(weights[0][0][0]);
 					}
 				}
-				float activatedOutputs[] = new float[neuronNumbers[neuronNumbers.length - 1]];
+				float[] activatedOutputs = new float[neurons[neurons.length - 1]];
 				if(activation != Activation.SOFTMAX) {
 					for(int l = 0;l < activatedOutputs.length;l++) {
 						activatedOutputs[l] = Util.activate(activations[activations.length - 1][l], activation);
@@ -453,16 +293,16 @@ public class MLP implements Serializable{
 					activatedOutputs = Util.softmax(activations[activations.length - 1]);
 				}
 				float cost = 0;
-				for(int l = 0;l < neuronNumbers[neuronNumbers.length - 1];l++) {
+				for(int l = 0; l < neurons[neurons.length - 1]; l++) {
 					cost += Util.loss(activatedOutputs[l], targets[l], loss);
 				}
 				if(loss == Loss.CE) {
 					cost *= -1;
 				}
-				
+
 				// Initialize and compute arrays of derivatives
 				// The derivative of the cost function
-				float dCostDActivatedOutputs[] = new float[neuronNumbers[neuronNumbers.length - 1]];
+				float[] dCostDActivatedOutputs = new float[neurons[neurons.length - 1]];
 				for(int l = 0;l < dCostDActivatedOutputs.length;l++) {
 					if(loss == Loss.SE) {
 						dCostDActivatedOutputs[l] = 2 * (activatedOutputs[l] - targets[l]);
@@ -472,9 +312,9 @@ public class MLP implements Serializable{
 				}
 
 				// The derivative of the activation function
-				float[] dActivatedOutputsDOutputs[] = new float[activations.length - 1][];
+				float[][] dActivatedOutputsDOutputs = new float[activations.length - 1][];
 				for(int l = 0;l < dActivatedOutputsDOutputs.length;l++) {
-					float tempArray[] = new float[neuronNumbers[neuronNumbers.length - (l + 1)]];
+					float[] tempArray = new float[neurons[neurons.length - (l + 1)]];
 					dActivatedOutputsDOutputs[l] = tempArray;
 				}
 				for(int l = 0;l < dActivatedOutputsDOutputs.length;l++) {
@@ -486,12 +326,6 @@ public class MLP implements Serializable{
 								dActivatedOutputsDOutputs[0][0] = Util.activate(activations[activations.length - 1][m], Activation.SIGMOID);
 							} else {
 								dActivatedOutputsDOutputs[l][m] = Util.activate(activations[activations.length - (l + 1)][m], Activation.SIGMOID);
-							}
-						} else if(activation == Activation.SOFTMAX) {
-							if(l == 0) {
-								dActivatedOutputsDOutputs[l][m] = 1;// activatedOutputs[m] - trainXBatch[k][m + neuronNumbers[0]];
-							} else {
-								dActivatedOutputsDOutputs[l][m] = 1;// activate(neurons[neurons.length - (l + 1)][m], activation) * (1 - activate(neurons[neurons.length - (l + 1)][m], activation));
 							}
 						} else if(activation == Activation.RELU) {
 							if(activations[activations.length - (l + 1)][m] > 0) {
@@ -507,24 +341,22 @@ public class MLP implements Serializable{
 				}
 
 				// The derivative of the calculate function
-				float[][] dOutputsDWeights[] = new float[weights.length][][];
+				float[][][] dOutputsDWeights = new float[weights.length][][];
 				for(int l = 0;l < weights.length;l++) {
-					float[] tempArray[] = new float[weights[l].length][activations[l].length];
+					float[][] tempArray = new float[weights[l].length][activations[l].length];
 					dOutputsDWeights[l] = tempArray;
 				}
 				for(int l = 0;l < dOutputsDWeights.length;l++) {
 					for(int m = 0;m < dOutputsDWeights[l].length;m++) {
-						for(int n = 0;n < dOutputsDWeights[l][m].length;n++) {
-							dOutputsDWeights[l][m][n] = activations[l][n];
-						}
+						System.arraycopy(activations[l], 0, dOutputsDWeights[l][m], 0, dOutputsDWeights[l][m].length);
 					}
 				}
 
 				// The derivative of the cost function with respect to the weights and biases uses the chain rule by multiplying the derivatives of each of the functions being applied to the weights and biases
-				// For example,  the derivative of cost(sigmoid(calculate(weight))) is dCost * dSigmoid * dCalculate 
-				float[][] dCostDWeights[] = new float[weights.length][][];
+				// For example,  the derivative of cost(sigmoid(calculate(weight))) is dCost * dSigmoid * dCalculate
+				float[][][] dCostDWeights = new float[weights.length][][];
 				for(int l = 0;l < weights.length;l++) {
-					float[] tempArray[] = new float[weights[l].length][activations[l].length];
+					float[][] tempArray = new float[weights[l].length][activations[l].length];
 					dCostDWeights[l] = tempArray;
 				}
 				for(int l = 0;l < dCostDWeights.length;l++) {
@@ -545,9 +377,9 @@ public class MLP implements Serializable{
 					}
 				}
 
-				float[] dCostDBiases[] = new float[biases.length][];
+				float[][] dCostDBiases = new float[biases.length][];
 				for(int l = 0;l < biases.length;l++) {
-					float tempArray[] = new float[biases[l].length];
+					float[] tempArray = new float[biases[l].length];
 					dCostDBiases[l] = tempArray;
 				}
 				for(int l = 0;l < dCostDBiases.length;l++) {
@@ -585,9 +417,9 @@ public class MLP implements Serializable{
 			averageLoss = totalCost / trainXBatches[j].length;
 
 			// Initialize and compute arrays of average derivatives
-			float[][] averageDCostDWeights[] = new float[weights.length][][];
+			float[][][] averageDCostDWeights = new float[weights.length][][];
 			for(int k = 0;k < weights.length;k++) {
-				float[] tempArray[] = new float[weights[k].length][activations[k].length];
+				float[][] tempArray = new float[weights[k].length][activations[k].length];
 				for(int l = 0;l < tempArray.length;l++) {
 					for(int m = 0;m < tempArray[l].length;m++) {
 						tempArray[l][m] = totalDCostDWeights[k][l][m] / trainXBatches[j].length;
@@ -596,9 +428,9 @@ public class MLP implements Serializable{
 				averageDCostDWeights[k] = tempArray;
 			}
 
-			float[] averageDCostDBiases[] = new float[biases.length][];
+			float[][] averageDCostDBiases = new float[biases.length][];
 			for(int k = 0;k < biases.length;k++) {
-				float tempArray[] = new float[biases[k].length];
+				float[] tempArray = new float[biases[k].length];
 				for(int l = 0;l < tempArray.length;l++) {
 					tempArray[l] = totalDCostDBiases[k][l] / trainXBatches[j].length;
 				}
@@ -630,18 +462,15 @@ public class MLP implements Serializable{
 	 * @param saveTime       The frequency at which to save the model
 	 * @param batchSize      The number of training examples per iteration
 	 * @param learningRate   The rate at which to update the parameters
-	 * @param decay          The decay to use in regularization
 	 * @param fileName       The path to where the model should be saved
-	 * @return void
-	 * @throws IOException
 	 */
-	public void customTrain(boolean test, int trainTime, int printLoss, int saveTime, float learningRate, int batchSize, float decay, String fileName) throws IOException {
+	public void customTrain(boolean test, int trainTime, int printLoss, int saveTime, float learningRate, int batchSize, String fileName) throws IOException {
 		for(int i = 0;i <= trainTime;i++) {
 			trainSGD(learningRate, batchSize);
 			if(i % printLoss == 0) {
 				System.out.println("Iteration: " + i + " Loss: " + getCost());
 				if(test) {
-					System.out.println("Accuracy: " + test() + " / " + testX.length);
+					System.out.println("Accuracy: " + test() + " / " + testInputs.length);
 				}
 			}
 			if(saveTime != 0 && i % saveTime == 0) {
@@ -649,38 +478,36 @@ public class MLP implements Serializable{
 			}
 		}
 	}
-	
+
 	/**
 	 * Evaluates the model on the training set.
 	 * @return the current test accuracy
 	 */
 	public float test() {
-		for(int i = 0;i < activations.length;i++) {
-			for(int j = 0;j < activations[i].length;j++) {
-				activations[i][j] = 0;
-			}
+		for (float[] floats : activations) {
+			Arrays.fill(floats, 0);
 		}
 		float accuracy = 0;
-		for(int i = 0;i < testX.length;i++) {
+		for(int i = 0; i < testInputs.length; i++) {
 			// Feed data forward
 			for(int j = 0;j < activations.length - 1;j++) {
 				for(int k = 0;k < activations[j].length;k++) {
 					if(j == 0) {
-						activations[j][k] = testY[i][k];
+						activations[j][k] = testLabels[i][k];
 					} else {
 						activations[j][k] = Util.activate(Util.calculate(activations[j - 1], weights[j - 1][k], biases[j - 1][k]), activation);
 					}
 				}
 			}
 
-			float targets[] = new float[neuronNumbers[neuronNumbers.length - 1]];
+			float[] targets = new float[neurons[neurons.length - 1]];
 			for(int j = 0;j < targets.length;j++) {
-				targets[targets.length - (j + 1)] = testX[i][testX[i].length - (j + 1)];
+				targets[targets.length - (j + 1)] = testInputs[i][testInputs[i].length - (j + 1)];
 			}
 			for(int j = 0;j < activations[activations.length - 1].length;j++) {
 				activations[activations.length - 1][j] = Util.calculate(activations[activations.length - 2], weights[weights.length - 1][j], biases[biases.length - 1][j]);
 			}
-			float activatedOutputs[] = new float[neuronNumbers[neuronNumbers.length - 1]];
+			float[] activatedOutputs = new float[neurons[neurons.length - 1]];
 			if(activation != Activation.SOFTMAX) {
 				for(int j = 0;j < activatedOutputs.length;j++) {
 					activatedOutputs[j] = Util.activate(activations[activations.length - 1][j], activation);
@@ -689,9 +516,10 @@ public class MLP implements Serializable{
 				activatedOutputs = Util.softmax(activations[activations.length - 1]);
 			}
 			boolean correct = true;
-			for(int j = 0;j < neuronNumbers[neuronNumbers.length - 1];j++) {
-				if((float) Math.round(activatedOutputs[j]) != targets[j]) {
+			for(int j = 0; j < neurons[neurons.length - 1]; j++) {
+				if ((float) Math.round(activatedOutputs[j]) != targets[j]) {
 					correct = false;
+					break;
 				}
 			}
 			if(correct) {
@@ -699,16 +527,16 @@ public class MLP implements Serializable{
 			}
 		}
 		return accuracy;
-	
+
 	}
-	
+
 	/**
 	 * Returns the model's prediction on the given input.
 	 * @param inputs  A 1D array of data
 	 * @return        The model's prediction on `inputs`
 	 */
 	public float[] feedForward(float[] inputs) {
-		float newOutputs[] = new float[neuronNumbers[neuronNumbers.length - 1]];
+		float[] newOutputs = new float[neurons[neurons.length - 1]];
 		if(activations.length == 2) {
 			if(activation != Activation.SOFTMAX) {
 				for(int i = 0;i < newOutputs.length;i++) {
@@ -723,11 +551,11 @@ public class MLP implements Serializable{
 		} else {
 			for(int i = 0;i < activations.length - 2;i++) {
 				if(i == 0) {
-					for(int j = 0;j < neuronNumbers[1];j++) {
+					for(int j = 0; j < neurons[1]; j++) {
 						activations[1][j] = Util.activate(Util.calculate(inputs, weights[i][j], biases[i][j]), activation);
 					}
 				} else {
-					for(int j = 0;j < neuronNumbers[i + 1];j++) {
+					for(int j = 0; j < neurons[i + 1]; j++) {
 						activations[i + 1][j] = Util.activate(Util.calculate(activations[i - 1], weights[i][j], biases[i][j]), activation);
 					}
 				}
@@ -745,55 +573,14 @@ public class MLP implements Serializable{
 		}
 		return newOutputs;
 	}
-	
-	/**
-	 * Prints the current weights of the model.
-	 * @return void
-	 */
-	public void printWeights() {
-		for (int i = 0; i < weights.length; i++) {
-			for (int j = 0; j < weights[i].length; j++) {
-				for (int k = 0; k < weights[i][j].length; k++) {
-					System.out.println(weights[i][j][k]);
-				}
-				System.out.println("");
-			}
-			System.out.println("");
-		}
-	}
-	
-	/**
-	 * Prints the current biases of the model.
-	 * @return void
-	 */
-	public void printBiases() {
-		for(int i = 0;i < biases.length;i++) {
-			for(int j = 0;j < biases[i].length;j++) {
-				System.out.println(biases[i][j]);
-			}
-			System.out.println("");
-		}
-	}
-	
-	/**
-	 * Prints the current parameters of the model.
-	 * @return void
-	 */
-	public void printParameters() {
-		System.out.println("Weights:");
-		printWeights();
-		System.out.println("Biases:");
-		printBiases();
-	}
-	
+
 	/**
 	 * Prints the model's prediction on an input vector.
-	 * @param x      The input vector
-	 * @return void
+	 * @param inputs      The input vector
 	 */
-	public void printOutputs(float inputs[]) {
+	public void printOutputs(float[] inputs) {
 		System.out.println("\n" + "Predicted Outputs:");
-		for (int i = 0; i < neuronNumbers[neuronNumbers.length - 1]; i++) {
+		for (int i = 0; i < neurons[neurons.length - 1]; i++) {
 			System.out.println(feedForward(inputs)[i]);
 		}
 	}
@@ -801,8 +588,6 @@ public class MLP implements Serializable{
 	/**
 	 * Saves the model to a file.
 	 * @param fileName      The path to save the model to
-	 * @return void
-	 * @throws IOException
 	 */
 	public void save(String fileName) throws IOException {
 		OutputStream outStream = new FileOutputStream(fileName);
@@ -816,8 +601,6 @@ public class MLP implements Serializable{
 	 * Loads a model from a file
 	 * @param fileName                 The path to load from
 	 * @return                         The loaded MLP
-	 * @throws IOException
-	 * @throws ClassNotFoundException
 	 */
 	public static MLP load(String fileName) throws IOException,  ClassNotFoundException {
         InputStream inStream = new FileInputStream(fileName);
